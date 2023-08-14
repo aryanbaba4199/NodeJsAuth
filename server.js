@@ -21,6 +21,7 @@ mongoose.connect(db)
 //------------ EJS Configuration ------------//
 app.use(expressLayouts);
 app.use("/assets", express.static('./assets'));
+app.use(express.static(__dirname + '/public'));
 app.set('view engine', 'ejs');
 
 //------------ Bodyparser Configuration ------------//
@@ -52,7 +53,7 @@ app.use(function(req, res, next) {
 //------------ Routes ------------//
 app.use('/', require('./routes/index'));
 app.use('/auth', require('./routes/auth'));
-app.use(express.static(__dirname + '/public'));
+
 
 const PORT = process.env.PORT || 3000;
 
