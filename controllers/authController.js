@@ -176,7 +176,10 @@ exports.activateHandle = (req, res) => {
 }
 
 //------------ Forgot Password Handle ------------//
-exports.forgotPassword = (req, res) => {
+
+
+
+exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
 
     let errors = [];
@@ -192,89 +195,79 @@ exports.forgotPassword = (req, res) => {
             email
         });
     } else {
-        User.findOne({ email: email }).then(user => {
+        try {
+            const user = await User.findOne({ email: email });
+
             if (!user) {
-                //------------ User already exists ------------//
+                //------------ User does not exist ------------//
                 errors.push({ msg: 'User with Email ID does not exist!' });
-                res.render('forgot', {
+                return res.render('forgot', {
                     errors,
                     email
                 });
-            } else {
+            }
 
-                const oauth2Client = new OAuth2(
-                    "173872994719-pvsnau5mbj47h0c6ea6ojrl7gjqq1908.apps.googleusercontent.com", // ClientID
-                    "OKXIYR14wBB_zumf30EC__iJ", // Client Secret
-                    "https://developers.google.com/oauthplayground" // Redirect URL
-                );
+            const oauth2Client = new OAuth2(
+                "173872994719-pvsnau5mbj47h0c6ea6ojrl7gjqq1908.apps.googleusercontent.com",
+                "OKXIYR14wBB_zumf30EC__iJ",
+                "https://developers.google.com/oauthplayground"
+            );
 
-                oauth2Client.setCredentials({
-                    refresh_token: "1//04T_nqlj9UVrVCgYIARAAGAQSNwF-L9IrGm-NOdEKBOakzMn1cbbCHgg2ivkad3Q_hMyBkSQen0b5ABfR8kPR18aOoqhRrSlPm9w"
-                });
-                const accessToken = oauth2Client.getAccessToken()
+            oauth2Client.setCredentials({
+                refresh_token: "1//04T_nqlj9UVrVCgYIARAAGAQSNwF-L9IrGm-NOdEKBOakzMn1cbbCHgg2ivkad3Q_hMyBkSQen0b5ABfR8kPR18aOoqhRrSlPm9w"
+            });
 
-                const token = jwt.sign({ _id: user._id }, JWT_RESET_KEY, { expiresIn: '30m' });
-                const CLIENT_URL = 'http://' + req.headers.host;
-                const output = `
+            const accessToken = oauth2Client.getAccessToken();
+            const token = jwt.sign({ _id: user._id }, JWT_RESET_KEY, { expiresIn: '30m' });
+            const CLIENT_URL = 'http://' + req.headers.host;
+            const output = `
                 <h2>Please click on below link to reset your account password</h2>
                 <p>${CLIENT_URL}/auth/forgot/${token}</p>
                 <p><b>NOTE: </b> The activation link expires in 30 minutes.</p>
-                `;
+            `;
 
-                User.updateOne({ resetLink: token }, (err, success) => {
-                    if (err) {
-                        errors.push({ msg: 'Error resetting password!' });
-                        res.render('forgot', {
-                            errors,
-                            email
-                        });
-                    }
-                    else {
-                        const transporter = nodemailer.createTransport({
-                            service: 'gmail',
-                            auth: {
-                                type: "OAuth2",
-                                user: "nodejsa@gmail.com",
-                                clientId: "173872994719-pvsnau5mbj47h0c6ea6ojrl7gjqq1908.apps.googleusercontent.com",
-                                clientSecret: "OKXIYR14wBB_zumf30EC__iJ",
-                                refreshToken: "1//04T_nqlj9UVrVCgYIARAAGAQSNwF-L9IrGm-NOdEKBOakzMn1cbbCHgg2ivkad3Q_hMyBkSQen0b5ABfR8kPR18aOoqhRrSlPm9w",
-                                accessToken: accessToken
-                            },
-                        });
+            await User.updateOne({ resetLink: token });
 
-                        // send mail with defined transport object
-                        const mailOptions = {
-                            from: '"Auth Admin" <nodejsa@gmail.com>', // sender address
-                            to: email, // list of receivers
-                            subject: "Account Password Reset: NodeJS Auth ✔", // Subject line
-                            html: output, // html body
-                        };
+            const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    type: "OAuth2",
+                    user: "nodejsa@gmail.com",
+                    clientId: "173872994719-pvsnau5mbj47h0c6ea6ojrl7gjqq1908.apps.googleusercontent.com",
+                    clientSecret: "OKXIYR14wBB_zumf30EC__iJ",
+                    refreshToken: "1//04T_nqlj9UVrVCgYIARAAGAQSNwF-L9IrGm-NOdEKBOakzMn1cbbCHgg2ivkad3Q_hMyBkSQen0b5ABfR8kPR18aOoqhRrSlPm9w",
+                    accessToken: accessToken
+                },
+            });
 
-                        transporter.sendMail(mailOptions, (error, info) => {
-                            if (error) {
-                                console.log(error);
-                                req.flash(
-                                    'error_msg',
-                                    'Something went wrong on our end. Please try again later.'
-                                );
-                                res.redirect('/auth/forgot');
-                            }
-                            else {
-                                console.log('Mail sent : %s', info.response);
-                                req.flash(
-                                    'success_msg',
-                                    'Password reset link sent to email ID. Please follow the instructions.'
-                                );
-                                res.redirect('/auth/login');
-                            }
-                        })
-                    }
-                })
+            const mailOptions = {
+                from: '"Auth Admin" <nodejsa@gmail.com>',
+                to: email,
+                subject: "Account Password Reset: NodeJS Auth ✔",
+                html: output,
+            };
 
-            }
-        });
+            const info = await transporter.sendMail(mailOptions);
+
+            console.log('Mail sent : %s', info.response);
+            req.flash(
+                'success_msg',
+                'Password reset link sent to email ID. Please follow the instructions.'
+            );
+            res.redirect('/auth/login');
+        } catch (error) {
+            console.log(error);
+            req.flash(
+                'error_msg',
+                'Something went wrong on our end. Please try again later.'
+            );
+            res.redirect('/auth/forgot');
+        }
     }
 }
+
+
+
 
 //------------ Redirect to Reset Handle ------------//
 exports.gotoReset = (req, res) => {
@@ -386,7 +379,7 @@ exports.loginHandle = (req, res, next) => {
 
 //------------ Logout Handle ------------//
 exports.logoutHandle = (req, res) => {
-    req.logout(() => {
+    req.logout(() =>{
         req.flash('success_msg', 'You are logged out');
         res.redirect('/auth/login');
     });
